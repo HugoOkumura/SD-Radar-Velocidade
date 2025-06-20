@@ -1,0 +1,26 @@
+
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2.0.21
+    ports:
+      - '8830:8830'
+    volumes:
+      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf
+    command: mosquitto -c /mosquitto/config/mosquitto.conf
+
+  rabbitmq:
+    image: rabbitmq:4.4.1
+    ports:
+    - "5672:56720"
+    environment:
+      - RABBITMQ_DEFAULT_USER=admin
+      - RABBITMQ_DEFAULT_PASS=admin
+
+  simulador-radar:
+    build: ./simulador-radar
+    container_name: simulador-radar
+    environment:
+      - MOSQUITTO_HOST=mosquitto
+      - MOSQUITTO_TOPIC=speed-reading
+    depends_on:
+      - mosquitto
