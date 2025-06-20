@@ -1,30 +1,26 @@
-version: '3'
 
 services:
-  mqtt-broker:
+  mosquitto:
     image: eclipse-mosquitto:2.0.21
-    container_name: mosquitto-broker
     ports:
-    - "8883:8883"
+      - '8830:8830'
     volumes:
-      - ./mosquitto/config:/mosquitto/config
-      - ./moquitto/data:/moquitto/data
-      - ./moquitto/log:/moquitto/log
-  
-  simulador-iot:
-    build: ./radar
-    container_name: simulador-iot
-    environment:
-      - MQTT_HOST=mqtt-broker
-      - MQTT_PORT=8883
-    depends_on:
-      - mqtt-broker
+      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf
+    command: mosquitto -c /mosquitto/config/mosquitto.conf
 
-  servico-radar:
-    build: ./servico-radar
-    container_name: servico-radar
+  rabbitmq:
+    image: rabbitmq:4.4.1
+    ports:
+    - "5672:56720"
     environment:
-      - MQTT_HOST=mqtt-broker
-      - MQTT_HOST=8883
+      - RABBITMQ_DEFAULT_USER=admin
+      - RABBITMQ_DEFAULT_PASS=admin
+
+  simulador-radar:
+    build: ./simulador-radar
+    container_name: simulador-radar
+    environment:
+      - MOSQUITTO_HOST=mosquitto
+      - MOSQUITTO_TOPIC=speed-reading
     depends_on:
-    - mqtt-broker
+      - mosquitto
