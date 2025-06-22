@@ -3,24 +3,101 @@ services:
   mosquitto:
     image: eclipse-mosquitto:2.0.21
     ports:
-      - '8830:8830'
+      - '8883:8883'
     volumes:
       - ./mosquitto.conf:/mosquitto/config/mosquitto.conf
     command: mosquitto -c /mosquitto/config/mosquitto.conf
 
   rabbitmq:
-    image: rabbitmq:4.4.1
+    image: rabbitmq:4.4.1-management
     ports:
-    - "5672:56720"
+    - "5672:5672"
+    - "15672:15672" #UI de gerenciamento 
     environment:
       - RABBITMQ_DEFAULT_USER=admin
       - RABBITMQ_DEFAULT_PASS=admin
+      - RABBITMQ_DEFAULT_VHOST=/
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+
+  mongo-multas:
+    image: mongo
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=root
+      - MONGO_INITDB_ROOT_PASSWORD=root
+    volumes:
+      - mongodb_multas:/data/db
+
+  mongo-leituras:
+    image: mongo
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=root
+      - MONGO_INITDB_ROOT_PASSWORD=root
+    volumes:
+      - mongodb_leituras:/data/db
 
   simulador-radar:
-    build: ./simulador-radar
+    build: ./simulador_radar
     container_name: simulador-radar
     environment:
       - MOSQUITTO_HOST=mosquitto
       - MOSQUITTO_TOPIC=speed-reading
+      - MOSQUITTO_PORT=8883
+      - THREAD_COUNT=10
     depends_on:
       - mosquitto
+    
+  servico-leituras:
+    build: ./servico_leituras
+    container_name: servico-leituras
+    ports:
+      - "50051:50051"
+    environment:
+      - MOSQUITTO_HOST=mosquitto
+      - MOSQUITTO_TOPIC=speed-reading
+      - MONGO_URI=mongodb://root:root@mongo-leituras:21017
+      - MONGO_DB=letiuras_velocidade
+    depends_on:
+      - mosquitto
+      - mongo-leituras
+      
+  servico-multas:
+    build: ./servico_multas
+    container_name: servico_multas
+    ports:
+      - "5000:5000"
+    environment:
+      - SERVICO_LEITURAS_HOST=servico-leituras
+      - SERVICO_LEITURAS_PORT=50051
+      - MONGO_URI=mongodb://root:root@mongo-multas:21017
+      - MONGO_DB=multas
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_QUEUE=notifications
+      - JWT_SECRET_KEY=secretkey
+    depends_on:
+      - mongo-multas
+      - servico-leituras
+  
+  servico-notificacao:
+    build: ./servico_notificacao
+    container_name: servico_notificacao
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_QUEUE=notificacao
+    depends_on:
+      - rabbitmq
+  
+  app-usuario:
+    build: ./app_usuario
+    container_name: app-usuario
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_QUEUE=notificacao
+      - APIT_MULTAS=servico_multas
+    depends_on:
+      - rabbitmq
+
+volumes:
+  mongodb_leituras:
+  mongodb_multas:
+  rabbitmq_data:
