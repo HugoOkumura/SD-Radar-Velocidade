@@ -8,18 +8,31 @@ import logging
 from collections import deque  
 from dataclasses import dataclass
 
+'''
+Nome: Hugo Naoki Sonoda Okumura
+Criado: 10/06/2025
+Última atualização: 29/06/2025
+ # Este código implementa o simulador de dispositivos IoT.
+ # Aqui, irá criar threads que serão os processos dos dispositivos que irão gerar leituras aleatórias de velocidade e
+ # cada dispositivo irá criar outra thread que irá enviar todos as leituras para o mqtt broker.
+'''
+
+# pega as variáeis de ambiente do docker
 MQTT_BROKER = os.getenv('MOSQUITTO_HOST')
 MQTT_PORT = int(os.getenv('MOSQUITTO_PORT'))
 MQTT_TOPIC = os.getenv('MOSQUITTO_TOPIC')
 
+# Lista de velocidades
 LIMITES = [40,60,80,100,110]
 
+# Lista de placas de automóveis
 PLACAS= ["ABC1D23", "BRA2E19", "FGH5J67",
          "KLM9N45", "OPQ8R21", "STU3V90",
          "WXY7Z34", "JKL4M56", "DEF6G78",
          "MNO1P29"
         ]
 
+# Configurações do Log do sistema
 def startLog():
     logging.basicConfig(
         level=logging.INFO,
@@ -173,7 +186,7 @@ class DispositivoIoT(threading.Thread):
                 id_dispositivo=self.id,
                 limite = self.limite,
                 data = time.time(),
-                velocidade = random.uniform(0,120),
+                velocidade = random.randint(0,self.limite+20),
                 placa = PLACAS[random.randint(0, len(PLACAS)-1)]
             )
 
@@ -195,7 +208,9 @@ class DispositivoIoT(threading.Thread):
         self.client.disconnect()
 
 
-
+'''
+Classe que irá inicializar os dispositivos
+'''
 class ClusterIoT():
     def __init__(self, n_dispositivos):
         self.dispositivos = [DispositivoIoT(n) for n in range(n_dispositivos)]

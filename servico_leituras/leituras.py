@@ -16,6 +16,7 @@ Criado: 23/06/2025
  # Mais detalhes sobre o gerenciamento do banco de dados está no arquivo db_store.py
 '''
 
+# pega as variáeis de ambiente do docker
 MQTT_BROKER = os.getenv('MOSQUITTO_HOST')
 MQTT_PORT = int(os.getenv('MOSQUITTO_PORT'))
 MQTT_TOPIC = os.getenv('MOSQUITTO_TOPIC')
@@ -106,6 +107,10 @@ class ServicoLeitura():
     '''
     Métodos do serviço
     '''
+
+    '''
+    Rotina de inserir as leituras para o banco de dados
+    '''
     def run(self):
         while True:
             if not self.leituras.empty():
@@ -118,7 +123,9 @@ class ServicoLeitura():
                     self.leituras.put_nowait(leitura)
 
                 self.leituras.task_done()
-
+    '''
+    Método que faz a rotina de conexão e inicia a thread que inicia o loop de recebimento de mensagens
+    '''
     def connect(self):
         try:
             self.client.connect(
@@ -128,7 +135,6 @@ class ServicoLeitura():
             self.receive_thread.start()
         except Exception as e:
             logging.error(f"Serviço de Leituras: erro ao conectar - {e}")
-
 
     '''
     Thread que irá receber todas as mensagens do broker
