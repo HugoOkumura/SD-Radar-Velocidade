@@ -9,7 +9,7 @@ from collections import deque
 from dataclasses import dataclass
 
 MQTT_BROKER = os.getenv('MOSQUITTO_HOST')
-MQTT_PORT = os.getenv('MOSQUITTO_PORT')
+MQTT_PORT = int(os.getenv('MOSQUITTO_PORT'))
 MQTT_TOPIC = os.getenv('MOSQUITTO_TOPIC')
 
 LIMITES = [40,60,80,100,110]
@@ -30,15 +30,22 @@ def startLog():
         encoding="utf-8",
         filemode="a"
     )
-
-class LeituraFormato():
+'''
+Classe que modela o formato da leitura.
+'''
+@dataclass
+class LeituraFormato:
     id_dispositivo: str
     limite: int
     data: time
     velocidade: int
     placa: str
 
-
+'''
+Classe que irá transmitir os sinais de dispositivos IoT. Cria uma thread que 
+irá fazer a transmissão. A thread principal irá gerar leituras aleatórias e armazenar 
+em um buffer.
+'''
 class DispositivoIoT(threading.Thread):
     def __init__(self, dispositivo_id):
         threading.Thread.__init__(self)
@@ -49,14 +56,14 @@ class DispositivoIoT(threading.Thread):
         self.id = dispositivo_id
         # Define qual o limite de velocidade que o dispositivo detecta
         self.limite = LIMITES[dispositivo_id%5]
-        self.lock = threading.Lock
         # buffer de leituras de velocidade
         self.leituras = deque(maxlen=50)
-        self.send_thread = threading.Thread(target=self.thread_envio, daemon=True)
-        self.stop = threading.Event()
+
+
+        logging.info(f"Dispositivo {dispositivo_id} iniciado")
 
         '''
-        Configuração do publisher
+        Configuração do publisher MQTT
         ''' 
         self.client = mqtt.Client(
             callback_api_version=mqtt.CallbackAPIVersion.VERSION2,
@@ -66,17 +73,24 @@ class DispositivoIoT(threading.Thread):
         # Callbacks de eventos    
         self.client.enable_logger()
         self.client.on_connect = self._on_connect
-        self.client.on_connect_fail = self._on_connect_fail
-        
+        # self.client.on_connect_fail = self._on_connect_fail
+        '''
+        Configuração das threads que irão enviar dados ao broker
+        '''
+        self.lock = threading.Lock()
+        self.send_thread = threading.Thread(target=self.thread_envio, daemon=True)
+        self.stop = threading.Event()
+
         self.connect()
-        
-        logging.info(f"Dispositivo {dispositivo_id} iniciado")
 
     '''
     Callback de conexão. Só irá ser acionada quando o publisher receber o ACK do broker
     '''
     def _on_connect(self, client, userdata, flags, reason_code, properties):
-        logging.info(f"Dispositivo {self.id} conectado ao Broker")
+        if reason_code.is_failure:
+            logging.error(f"Dispositivo {self.id} não conseguiu conectar ao broker")
+        else:
+            logging.info(f"Dispositivo {self.id} conectado ao Broker")
 
     '''
     Callback de conexão. Só irá ser acionada quando o pubisher receber uma resposta de rejeição do broker
@@ -100,7 +114,7 @@ class DispositivoIoT(threading.Thread):
             self.client.loop_start()
 
         except Exception as e:
-            logging.error(f"Dispositivo {self.id}: erro ao conectar")
+            logging.error(f"Dispositivo {self.id}: erro ao conectar - {e}")
 
             
     '''
@@ -110,7 +124,7 @@ class DispositivoIoT(threading.Thread):
 
         while not self.stop.is_set():
 
-            if  self.leituras.count():
+            if  len(self.leituras):
 
                 # Lock para ler o buffer de leituras. Sem alterar o buffer
                 with self.lock:
@@ -132,8 +146,9 @@ class DispositivoIoT(threading.Thread):
                         qos=1       # Pelo menos uma vez
                     )
 
+                    info.wait_for_publish(timeout=60)
                     # Espera a mensagem ser publicada com timeout de 1 segundo. Se sucedido remove a leitura do buffer
-                    if info.wait_for_publish(timeout=1):
+                    if info.is_published(): 
                         logging.info(f"Dispositivo {self.id} publicou")
 
                         with self.lock:
@@ -151,6 +166,7 @@ class DispositivoIoT(threading.Thread):
     no loop dessa Thread ele irá receber leituras de velocidade e armazenar no buffer de leituras.
     '''
     def run(self):
+        time.sleep(0.5)
         while not self.stop.is_set():
 
             leitura = LeituraFormato(
@@ -207,7 +223,7 @@ def main():
     os.makedirs("./logs", exist_ok=True)
     open("logs/logs.log","a+").close()
     startLog()
-    n_threads = os.getenv("THREAD_COUNT")
+    n_threads = int(os.getenv("THREAD_COUNT"))
     try:
         cluster = ClusterIoT(n_threads)
         cluster.run()
