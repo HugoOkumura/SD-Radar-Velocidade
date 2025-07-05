@@ -1,0 +1,6 @@
+dnspython==2.7.0
+grpcio==1.73.1
+grpcio-tools==1.73.1
+protobuf==6.31.1
+pymongo==4.13.2
+setuptools==80.9.0

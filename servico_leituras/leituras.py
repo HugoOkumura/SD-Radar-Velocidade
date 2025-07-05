@@ -6,7 +6,12 @@ import logging
 import threading
 from queue import Queue
 from db_store import LeiturasManager
-
+import leitura_pb2
+import leitura_pb2_grpc
+from datetime import datetime, timezone
+from dateutil import parser
+from google.protobuf.timestamp_pb2 import Timestamp
+from numpy import int32
 '''
 Nome: Hugo Naoki Sonoda Okumura
 Criado: 23/06/2025
@@ -20,6 +25,8 @@ Criado: 23/06/2025
 MQTT_BROKER = os.getenv('MOSQUITTO_HOST')
 MQTT_PORT = int(os.getenv('MOSQUITTO_PORT'))
 MQTT_TOPIC = os.getenv('MOSQUITTO_TOPIC')
+MULTAS_SERVER = os.getenv('MULTAS_SERVER')
+MULTAS_PORT = int(os.getenv('MULTAS_PORT'))
 
 # Configurações do Log do sistema
 def startLog():
@@ -97,7 +104,7 @@ class ServicoLeitura():
     def _on_message(self, client, userdata, message):
         logging.info(f"Serviço de Leituras recebeu uma leitura")
         message = json.loads(message.payload.decode())
-        print(message)
+        message['data'] = parser.isoparse(message['data'])
         self.leituras.put_nowait(message)
 
     # Callback de desconecção ao broker
@@ -112,6 +119,9 @@ class ServicoLeitura():
     Rotina de inserir as leituras para o banco de dados
     '''
     def run(self):
+
+        threading.Thread(target=self.send_to_servico_multas, daemon=True).start()
+
         while True:
             if not self.leituras.empty():
                 leitura = self.leituras.get()
@@ -123,6 +133,53 @@ class ServicoLeitura():
                     self.leituras.put_nowait(leitura)
 
                 self.leituras.task_done()
+
+    '''
+    Stub gRPC com conexão segura
+    '''
+    def create_grpc_connection(self):
+        with open('ca-cert.pem','rb') as certif:
+            trusted_certs = certif.read()
+
+            credenciais = grpc.ssl_channel_credentials(
+                root_certificates=trusted_certs
+            )
+            options = [('grpc.ssl_target_name_override', 'servico_multas')]
+            return grpc.secure_channel(
+                f"{MULTAS_SERVER}:{MULTAS_PORT}",
+                credenciais,
+                options=options
+            )
+        
+    '''
+    Thread que irá enviar Todas as leituras que são marcadas como infrações para o serviço de multas
+    '''
+    def send_to_servico_multas(self):
+        while True:
+            try:
+                infracoes = self.mongo.retrieve_infracoes()
+
+                for infracao in infracoes:
+                    logging.info(infracao['placa'])
+                    with self.create_grpc_connection() as grpc_channel:
+                        stub = leitura_pb2_grpc.LeituraServiceStub(grpc_channel)
+
+                        response = stub.GerenciaLeituras(leitura_pb2.Leitura(
+                            limite = int32(infracao['limite']),
+                            data = Timestamp().FromDatetime(infracao['data']),
+                            velocidade = float(infracao['velocidade']),
+                            placa = str(infracao['placa'])
+                        ))
+
+                        if response.sucesso == True:
+                            logging.info("Serviço de Leituras enviou uma infração para o Serviço de Multas")
+                            self.mongo.change_status(infracao)
+                        else:
+                            raise Exception(f"Serviço de multas rejeitou o envio da multa")
+                        
+            except Exception as e:
+                logging.error(f"Serviço de Leituras falhou em enviar infração: {e}")
+
     '''
     Método que faz a rotina de conexão e inicia a thread que inicia o loop de recebimento de mensagens
     '''

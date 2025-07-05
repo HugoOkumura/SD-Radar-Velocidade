@@ -20,22 +20,6 @@ services:
   #   volumes:
   #     - rabbitmq_data:/var/lib/rabbitmq
 
-  # mongo-multas:
-  #   image: mongo
-  #   environment:
-  #     - MONGO_INITDB_ROOT_USERNAME=root
-  #     - MONGO_INITDB_ROOT_PASSWORD=root
-  #   volumes:
-  #     - mongodb_multas:/data/db
-
-  # mongo-leituras:
-  #   image: mongo
-  #   environment:
-  #     - MONGO_INITDB_ROOT_USERNAME=root
-  #     - MONGO_INITDB_ROOT_PASSWORD=root
-  #   volumes:
-  #     - mongodb_leituras:/data/db
-
   simulador-radar:
     build: ./simulador_radar
     container_name: simulador-radar
@@ -46,7 +30,24 @@ services:
       - THREAD_COUNT=3
     depends_on:
       - mosquitto
-    
+    volumes:
+      - ./simulador_radar/logs/logs.log:/app/logs/logs.log
+
+  servico-multas:
+    build: ./servico_multas
+    container_name: servico_multas
+    hostname: servico_multas
+    ports:
+      - "5000:5000"
+    environment:
+      - SERVICO_LEITURAS_HOST=servico-leituras
+      - SERVICO_LEITURAS_PORT=50051
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_QUEUE=notifications
+      - DB_SALT=multas
+    volumes:
+      - ./servico_multas/logs/logs.log:/app/logs/logs.log
+
   servico-leituras:
     build: ./servico_leituras
     container_name: servico-leituras
@@ -56,28 +57,17 @@ services:
       - MOSQUITTO_HOST=mosquitto
       - MOSQUITTO_TOPIC=speed-reading
       - MOSQUITTO_PORT=8883
-      # - MONGO_URI=mongodb://root:root@mongo-leituras:21017
       - MONGO_DB=letiuras_velocidade
+      - MULTAS_SERVER=servico_multas
+      - MULTAS_PORT=50051
     depends_on:
-      - mosquitto
-      # - mongo-leituras
+      # - mosquitto
+      - servico-multas
+    volumes:
+     - ./servico_leituras/logs/logs.log:/app/logs/logs.log
       
-  # servico-multas:
-  #   build: ./servico_multas
-  #   container_name: servico_multas
-  #   ports:
-  #     - "5000:5000"
-  #   environment:
-  #     - SERVICO_LEITURAS_HOST=servico-leituras
-  #     - SERVICO_LEITURAS_PORT=50051
-  #     - MONGO_URI=mongodb://root:root@mongo-multas:21017
-  #     - MONGO_DB=multas
-  #     - RABBITMQ_HOST=rabbitmq
-  #     - RABBITMQ_QUEUE=notifications
-  #     - JWT_SECRET_KEY=secretkey
-  #   depends_on:
-  #     - mongo-multas
-  #     - servico-leituras
+
+
   
   # servico-notificacao:
   #   build: ./servico_notificacao

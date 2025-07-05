@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+import "google/protobuf/timestamp.proto";
+
+message Leitura{
+    int32 limite = 1;
+    google.protobuf.Timestamp data = 2;
+    float velocidade = 3;
+    string placa = 4;
+}
+
+message Usuario{
+    string id = 1;
+    string nome = 2;
+    string placa = 3;
+}
+
+message Resposta{
+    Usuario user = 1;
+    bool sucesso = 3;
+}
+
+
+service LeituraService{
+    rpc GerenciaLeituras (Leitura) returns (Resposta);
+}

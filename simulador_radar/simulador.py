@@ -7,6 +7,7 @@ import threading
 import logging
 from collections import deque  
 from dataclasses import dataclass
+from datetime import datetime, timezone
 
 '''
 Nome: Hugo Naoki Sonoda Okumura
@@ -185,7 +186,7 @@ class DispositivoIoT(threading.Thread):
             leitura = LeituraFormato(
                 id_dispositivo=self.id,
                 limite = self.limite,
-                data = time.time(),
+                data = datetime.now(timezone.utc).isoformat(),
                 velocidade = random.randint(0,self.limite+20),
                 placa = PLACAS[random.randint(0, len(PLACAS)-1)]
             )
