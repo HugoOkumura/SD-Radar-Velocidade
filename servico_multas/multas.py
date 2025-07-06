@@ -17,7 +17,18 @@ from google.protobuf.timestamp_pb2 import Timestamp
 from flask import Flask, request, jsonify, make_response
 from flask_httpauth import HTTPBasicAuth
 
+'''
+Nome: Hugo Naoki Sonoda Okumura
+Criado: 01/07/2025
+Última atualização: 06/07/2025
+ # Este código implementa o serviço de multas e a API que o aplicativo web que o usuário irá utilizar para
+ # acessar suas multas.
+ # Aqui, é inicializado um servidor gRPC que irá receber leituras de infrações de velocidade e irá procurar
+ # qual usuário que cometeu a infração a partir da placa lida pelos dispositivos IoT. Ao encontrar quem foi o 
+ # responsável, irá armazenar em banco de dados MongoDB. 
+'''
 
+# inicializa e configura o logger
 def startLog():
     logging.basicConfig(
         level=logging.INFO,
@@ -29,23 +40,33 @@ def startLog():
         filemode="a"
     )
 
-SERVICE_PORT = os.getenv('SERVICO_LEITURAS_PORT')
-MONGODB_URI = "mongodb+srv://admin:admin@sd.wrdeptn.mongodb.net/?retryWrites=true&w=majority&appName=SD"
+# Porta que o grpc irá ser inicializado 
+SERVICE_PORT = os.getenv('MULTAS_GRPC_PORT')
+# URI do banco de dados MongoDB Atlas
+MONGODB_URI = os.getenv('MONGO_URI')
 
+
+'''
+Inicializa a conexão com o banco de dados e seleciona as coleções utilizadas
+'''
 mongo = MongoClient(MONGODB_URI, server_api=ServerApi('1'))
 db = mongo['SD_Projeto']
 multas_db = db['Multas']
 usuario_db = db['Usuarios']
 
+
+'''
+Class que irá gerenciar a conexão do gRPC com o serviço de leituras
+'''
 class MultasServico(LeituraServiceServicer):
     def __init__(self):
-        # self.db = mongo['SD_Projeto']
-        # self.multa_db = self.db['Multas']
-        # self.usuario_db = self.db['Usuarios']
-        # self.mongo.admin.command('ping')
-
         logging.info(f"Serviço de Multas conectou-se ao MongoDB")
 
+
+    '''
+    Método princiapl do servidor gRPC. Aqui é onde será recebida as leituras de velocidade e armazenados no MongoDB.
+    Retorna para o serviço de Leituras um objeto de Usuario que possui a placa do veículo infrator. 
+    '''
     def GerenciaLeituras(self, request, context):
         try:
             # usuario = self.usuario_db.find_one({"placa":request.placa})
@@ -83,6 +104,9 @@ class MultasServico(LeituraServiceServicer):
                 sucesso=False
             )
 
+    '''
+    Método de converção de Leitura para um documento inserível no banco
+    '''
     def doc_to_usuario(self, doc):
         return leitura_pb2.Usuario(
             id=str(doc.get("_id","")),
@@ -96,6 +120,9 @@ Configuração da API REST de Multas usando Flask
 app = Flask(__name__)
 auth = HTTPBasicAuth()
 
+'''
+Método para verificar as credenciais de autenticação 
+'''
 @auth.verify_password
 def verify_password(username,password):
     try:
@@ -117,7 +144,10 @@ def verify_password(username,password):
     except Exception as e:
         logging.error(f"Erro na autenticação: {e}")
         return None
-    
+
+'''
+Endpoint que lista todas as multas do usuário autenticado
+'''
 @app.route('/multas', methods=['GET'])
 @auth.login_required
 def get_multas():
@@ -143,6 +173,9 @@ def get_multas():
         logging.error(f"Erro ao buscar multas: {e}")
         return jsonify({'error':'Erro interno'}), 500
 
+'''
+Endpoint de validação de login
+'''
 @app.route('/validate_login', methods=['GET'])
 @auth.login_required
 def validate_login():
@@ -160,6 +193,10 @@ def validate_login():
         logging.error(f"Erro na validação de login: {e}")
         return jsonify({'valid': False, 'error': 'Erro interno'}), 200
 
+
+'''
+Thread que irá configurar e inicializar o servidor gRPC
+'''
 def serve_grpc():
     with open('server-cert.pem', 'rb') as f:
         certificate = f.read()
@@ -176,8 +213,7 @@ def serve_grpc():
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
     add_LeituraServiceServicer_to_server(MultasServico(), server)
 
-    # server.add_secure_port(f"[::]:{SERVICE_PORT}", server_credenciais)
-    server.add_secure_port(f"[::]:{50051}", server_credenciais)
+    server.add_secure_port(f"[::]:{SERVICE_PORT}", server_credenciais)
 
     logging.info("Serviço de Multas inicializado")
     server.start()

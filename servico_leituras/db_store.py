@@ -1,6 +1,5 @@
 from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
-from pymongo.errors import AutoReconnect
 
 '''
 Nome: Hugo Naoki Sonoda Okumura
@@ -10,14 +9,12 @@ Criado: 27/06/2025
  # IoT, para o MongoDB Atlas. 
 '''
 
-URI = "mongodb+srv://admin:admin@sd.wrdeptn.mongodb.net/?retryWrites=true&w=majority&appName=SD"
-
 '''
 Classe que irá gerenciar as funções de requisição de banco
 '''
 class LeiturasManager:
-    def __init__(self):
-        self.mongo = MongoClient(URI,server_api=ServerApi('1'))
+    def __init__(self, uri):
+        self.mongo = MongoClient(uri ,server_api=ServerApi('1'))
         self.db = self.mongo['SD_Projeto']
         self.collection = self.db['LeiturasVelocidade']
 
@@ -68,28 +65,6 @@ class LeiturasManager:
             return 1
         return 0
 
-# DEBUG CODE
-# if __name__ == "__main__":
-#     t = LeiturasManager()
-#     try:
-#         t.mongo.admin.command('ping')
-#     except Exception as e:
-#         print(e)
 
-#     l = LeituraFormato(
-#         id_dispositivo=2,
-#         limite=60,
-#         data=time.time(),
-#         velocidade=80,
-#         placa="TESTE"
-#     )
-
-#     # t.insert(l)
-
-#     lista = t.retrieve_infracoes()
-#     # print(lista[0].id)
-#     # print(lista[0]['_id'])
-
-#     t.change_status(lista[0])
 
     

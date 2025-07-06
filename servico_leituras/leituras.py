@@ -51,7 +51,7 @@ class ServicoLeitura():
         self.leituras = Queue(maxsize=100)
 
         # inicialização da conexão com o banco
-        self.mongo = LeiturasManager()
+        self.mongo = LeiturasManager(os.getenv('MONGO_URI'))
 
         logging.info(f"Serviço de Leituras conectou-se ao MongoDB")
         '''

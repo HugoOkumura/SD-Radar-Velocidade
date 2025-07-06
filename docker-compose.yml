@@ -1,5 +1,12 @@
 
 services:
+
+  init_db:
+    build: ./init_db
+    env_file:
+      - .env
+    restart: "no"
+    
   mosquitto:
     image: eclipse-mosquitto:2.0.21
     ports:
@@ -40,11 +47,10 @@ services:
     ports:
       - "5000:5000"
     environment:
-      - SERVICO_LEITURAS_HOST=servico-leituras
-      - SERVICO_LEITURAS_PORT=50051
-      - RABBITMQ_HOST=rabbitmq
-      - RABBITMQ_QUEUE=notifications
+      - MULTAS_GRPC_PORT=50051
       - DB_SALT=multas
+    env_file:
+      - .env
     volumes:
       - ./servico_multas/logs/logs.log:/app/logs/logs.log
 
@@ -61,6 +67,8 @@ services:
       - MONGO_DB=letiuras_velocidade
       - MULTAS_SERVER=servico_multas
       - MULTAS_PORT=50051
+    env_file:
+      - .env
     depends_on:
       # - mosquitto
       - servico-multas
