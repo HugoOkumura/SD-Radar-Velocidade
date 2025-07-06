@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Multas</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Suas Multas</h1>
+        <a href="{{ url_for('logout') }}" class="logout">Sair</a>
+        
+        {% if error %}
+            <div class="error">{{ error }}</div>
+        {% endif %}
+        
+        <table>
+            <thead>
+                <tr>
+                    <th>Data</th>
+                    <th>Limite (km/h)</th>
+                    <th>Velocidade (km/h)</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for multa in multas %}
+                <tr>
+                    <td>{{ multa.data }}</td>
+                    <td>{{ multa.limite }}</td>
+                    <td>{{ multa.velocidade }}</td>
+                    <td class="status-{{ multa.paga.lower() }}">{{ multa.paga }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</body>
+</html>

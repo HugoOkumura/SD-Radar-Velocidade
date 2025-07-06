@@ -1,13 +1,9 @@
 from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
 from pymongo.errors import AutoReconnect
-
 from leitura_pb2_grpc import add_LeituraServiceServicer_to_server , LeituraServiceServicer
 import leitura_pb2 
 import grpc
-
-from http.server import BaseHTTPRequestHandler, HTTPServer
-
 from concurrent import futures
 from threading import Thread
 import os
@@ -16,9 +12,11 @@ import time
 import json
 import hashlib
 import base64
-
 from datetime import datetime, timezone
 from google.protobuf.timestamp_pb2 import Timestamp
+from flask import Flask, request, jsonify, make_response
+from flask_httpauth import HTTPBasicAuth
+
 
 def startLog():
     logging.basicConfig(
@@ -34,24 +32,24 @@ def startLog():
 SERVICE_PORT = os.getenv('SERVICO_LEITURAS_PORT')
 MONGODB_URI = "mongodb+srv://admin:admin@sd.wrdeptn.mongodb.net/?retryWrites=true&w=majority&appName=SD"
 
-class MultasServico(LeituraServiceServicer):
-    
-    def __init__(self):
-        try:
-            self.mongo = MongoClient(MONGODB_URI, server_api=ServerApi('1'))
-            self.db = self.mongo['SD_Projeto']
-            self.multa_db = self.db['Multas']
-            self.usuario_db = self.db['Usuarios']
-            self.mongo.admin.command('ping')
+mongo = MongoClient(MONGODB_URI, server_api=ServerApi('1'))
+db = mongo['SD_Projeto']
+multas_db = db['Multas']
+usuario_db = db['Usuarios']
 
-        except Exception as e:
-            logging.error(f"Serviço de Multas falhou em conectar ao MongoDB")
+class MultasServico(LeituraServiceServicer):
+    def __init__(self):
+        # self.db = mongo['SD_Projeto']
+        # self.multa_db = self.db['Multas']
+        # self.usuario_db = self.db['Usuarios']
+        # self.mongo.admin.command('ping')
 
         logging.info(f"Serviço de Multas conectou-se ao MongoDB")
 
     def GerenciaLeituras(self, request, context):
         try:
-            usuario = self.usuario_db.find_one({"placa":request.placa})
+            # usuario = self.usuario_db.find_one({"placa":request.placa})
+            usuario = usuario_db.find_one({"placa":request.placa})
             usuario = self.doc_to_usuario(usuario)
 
             data = request.data.ToDatetime()
@@ -67,7 +65,8 @@ class MultasServico(LeituraServiceServicer):
                 }
             }
 
-            multa_gerada = self.multa_db.insert_one(multa_documento).inserted_id
+            # multa_gerada = self.multa_db.insert_one(multa_documento).inserted_id
+            multa_gerada = multas_db.insert_one(multa_documento).inserted_id
 
             logging.info(f"Multa registrada: {multa_gerada}")
 
@@ -91,66 +90,75 @@ class MultasServico(LeituraServiceServicer):
             placa=doc.get("placa","")
         )
 
+'''
+Configuração da API REST de Multas usando Flask
+'''
+app = Flask(__name__)
+auth = HTTPBasicAuth()
 
-class MultasAPI(BaseHTTPRequestHandler):
-    def __init__(self, *args, **kwargs):
-        self.mongo = MongoClient(MONGODB_URI, server_api=ServerApi('1'))
-        self.db = self.mongo['SD_Projeto']
-        self.multas = self.db['Multas']
-        self.usuarios = self.db['Usuario']
-        super().__init__(*args, **kwargs)
-
-    def _authenticate(self, nome, senha):
-        usuario = self.usuarios.find_one({'nome':nome})
+@auth.verify_password
+def verify_password(username,password):
+    try:
+        usuario = usuario_db.find_one({'nome':username})
         if not usuario:
             return None
         
-        salt = os.getenv('DB_SALT')
-        senha512 = hashlib.pbkdf2_hmac('sha512',senha.encode('utf-8'), salt,) 
+        salt = os.getenv('DB_SALT').encode('utf-8')
+        senha_hash = hashlib.pbkdf2_hmac(
+            'sha512',
+            password.encode('utf-8'),
+            salt,
+            100000
+        )
 
-        if senha512 == base64.b64decode(usuario['senha']):
-            return usuario
+        if base64.b64encode(senha_hash).decode('utf-8') == usuario['senha']:
+            return username
+        return None
+    except Exception as e:
+        logging.error(f"Erro na autenticação: {e}")
         return None
     
-    def _get_credenciais(self):
-        auth_header = self.headers.get('Authorization')
-        if not auth_header or not auth_header.startswith('Basic '):
-            return None
+@app.route('/multas', methods=['GET'])
+@auth.login_required
+def get_multas():
+    try:
+        usuario = usuario_db.find_one({'nome': auth.current_user()})
+        if not usuario:
+            return jsonify({'error':"Usuário não encontrado"}), 404
         
-        auth_decoded = base64.b64decode(auth_header[6:].decode('utf-8'))
-        return auth_decoded.split(':',1)
+        multas = list(multas_db.find(
+            {
+            'usuario.user_id': str(usuario['_id']),
+            'usuario.user_placa': usuario['placa']
+            }
+        ))
 
-    def do_GET(self):
-        if self.path == '/multas':
-            credenciais = self._get_credenciais()
-        
-            if not credenciais:
-                self.send_response(401)
-                self.send_header('WWW-Authenticate', 'Basic realm="Multas API')
-                self.end_headers()
-                return
-        
-            nome, senha = credenciais
-            usuario = self._authenticate(nome, senha)
-            if not usuario:
-                self.send_response(403)
-                self.end_headers()
-                self.wfile.write(b'Invalid credentials')
-                return
-            
-            # Buscar multas apenas para a placa do usuário
-            fines = list(self.multas.find(
-                {'placa': usuario['placa']} 
-            ))
-            
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps(fines).encode())
-        else:
-            self.send_response(404)
-            self.end_headers()           
+        for multa in multas:
+            multa['_id'] = str(multa['_id'])
+            multa['data'] = multa['data'].isoformat()
+            multa['paga'] = 'Paga' if multa['paga'] else 'Pendente'
 
+        return jsonify(multas)
+    except Exception as e:
+        logging.error(f"Erro ao buscar multas: {e}")
+        return jsonify({'error':'Erro interno'}), 500
+
+@app.route('/validate_login', methods=['GET'])
+@auth.login_required
+def validate_login():
+    try:
+        usuario = usuario_db.find_one({'nome': auth.current_user()})
+        if not usuario:
+            return jsonify({'valid': False, 'error': 'Usuário não encontrado'}), 200
+        
+        return jsonify({
+            'valid': True,
+            'placa': usuario.get('placa', ''),
+            'nome': usuario.get('nome', '')
+        }), 200
+    except Exception as e:
+        logging.error(f"Erro na validação de login: {e}")
+        return jsonify({'valid': False, 'error': 'Erro interno'}), 200
 
 def serve_grpc():
     with open('server-cert.pem', 'rb') as f:
@@ -176,16 +184,11 @@ def serve_grpc():
     server.wait_for_termination()
     logging.info("Serviço de Multas finalizado")
 
-def ApiServe():
-    handler = lambda *args: MultasAPI(*args)
-    api = HTTPServer(('127.0.0.1', 5000),handler)
-    logging.info("API de multas foi inicializado")
-    api.serve_forever()
-
 
 if __name__ == "__main__":
     startLog()
     grpc_thread = Thread(target=serve_grpc)
     grpc_thread.start()
+    print('ok')
 
-    ApiServe()
+    app.run(host='0.0.0.0', port=5000)
