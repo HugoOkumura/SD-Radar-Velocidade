@@ -36,7 +36,7 @@ class LeituraServiceStub(object):
         """
         self.GerenciaLeituras = channel.unary_unary(
                 '/LeituraService/GerenciaLeituras',
-                request_serializer=leitura__pb2.EnvioLeitura.SerializeToString,
+                request_serializer=leitura__pb2.Leitura.SerializeToString,
                 response_deserializer=leitura__pb2.Resposta.FromString,
                 _registered_method=True)
 
@@ -55,7 +55,7 @@ def add_LeituraServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
             'GerenciaLeituras': grpc.unary_unary_rpc_method_handler(
                     servicer.GerenciaLeituras,
-                    request_deserializer=leitura__pb2.EnvioLeitura.FromString,
+                    request_deserializer=leitura__pb2.Leitura.FromString,
                     response_serializer=leitura__pb2.Resposta.SerializeToString,
             ),
     }
@@ -84,7 +84,7 @@ class LeituraService(object):
             request,
             target,
             '/LeituraService/GerenciaLeituras',
-            leitura__pb2.EnvioLeitura.SerializeToString,
+            leitura__pb2.Leitura.SerializeToString,
             leitura__pb2.Resposta.FromString,
             options,
             channel_credentials,

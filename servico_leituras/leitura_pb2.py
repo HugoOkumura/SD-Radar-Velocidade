@@ -25,7 +25,7 @@ _sym_db = _symbol_database.Default()
 from google.protobuf import timestamp_pb2 as google_dot_protobuf_dot_timestamp__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\rleitura.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"r\n\x07Leitura\x12\n\n\x02id\x18\x01 \x01(\t\x12\x0e\n\x06limite\x18\x02 \x01(\x05\x12(\n\x04\x64\x61ta\x18\x03 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x12\n\nvelocidade\x18\x04 \x01(\x02\x12\r\n\x05placa\x18\x05 \x01(\t\"2\n\x07Usuario\x12\n\n\x02id\x18\x01 \x01(\t\x12\x0c\n\x04nome\x18\x02 \x01(\t\x12\r\n\x05placa\x18\x03 \x01(\t\"*\n\x0c\x45nvioLeitura\x12\x1a\n\x08registro\x18\x01 \x01(\x0b\x32\x08.Leitura\"E\n\x08Resposta\x12\x16\n\x04user\x18\x01 \x01(\x0b\x32\x08.Usuario\x12\x10\n\x08mensagem\x18\x02 \x01(\t\x12\x0f\n\x07sucesso\x18\x03 \x01(\x08\x32>\n\x0eLeituraService\x12,\n\x10GerenciaLeituras\x12\r.EnvioLeitura\x1a\t.Respostab\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\rleitura.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"f\n\x07Leitura\x12\x0e\n\x06limite\x18\x01 \x01(\x05\x12(\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x12\n\nvelocidade\x18\x03 \x01(\x02\x12\r\n\x05placa\x18\x04 \x01(\t\"2\n\x07Usuario\x12\n\n\x02id\x18\x01 \x01(\t\x12\x0c\n\x04nome\x18\x02 \x01(\t\x12\r\n\x05placa\x18\x03 \x01(\t\"3\n\x08Resposta\x12\x16\n\x04user\x18\x01 \x01(\x0b\x32\x08.Usuario\x12\x0f\n\x07sucesso\x18\x03 \x01(\x08\x32\x39\n\x0eLeituraService\x12\'\n\x10GerenciaLeituras\x12\x08.Leitura\x1a\t.Respostab\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -33,13 +33,11 @@ _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'leitura_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
   DESCRIPTOR._loaded_options = None
   _globals['_LEITURA']._serialized_start=50
-  _globals['_LEITURA']._serialized_end=164
-  _globals['_USUARIO']._serialized_start=166
-  _globals['_USUARIO']._serialized_end=216
-  _globals['_ENVIOLEITURA']._serialized_start=218
-  _globals['_ENVIOLEITURA']._serialized_end=260
-  _globals['_RESPOSTA']._serialized_start=262
-  _globals['_RESPOSTA']._serialized_end=331
-  _globals['_LEITURASERVICE']._serialized_start=333
-  _globals['_LEITURASERVICE']._serialized_end=395
+  _globals['_LEITURA']._serialized_end=152
+  _globals['_USUARIO']._serialized_start=154
+  _globals['_USUARIO']._serialized_end=204
+  _globals['_RESPOSTA']._serialized_start=206
+  _globals['_RESPOSTA']._serialized_end=257
+  _globals['_LEITURASERVICE']._serialized_start=259
+  _globals['_LEITURASERVICE']._serialized_end=316
 # @@protoc_insertion_point(module_scope)

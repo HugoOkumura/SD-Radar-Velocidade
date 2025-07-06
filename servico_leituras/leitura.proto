@@ -3,11 +3,10 @@ syntax = "proto3";
 import "google/protobuf/timestamp.proto";
 
 message Leitura{
-    string id = 1;
-    int32 limite = 2;
-    google.protobuf.Timestamp data = 3;
-    float velocidade = 4;
-    string placa = 5;
+    int32 limite = 1;
+    google.protobuf.Timestamp data = 2;
+    float velocidade = 3;
+    string placa = 4;
 }
 
 message Usuario{
@@ -16,21 +15,12 @@ message Usuario{
     string placa = 3;
 }
 
-message EnvioLeitura{
-    Leitura registro = 1;
-}
-
 message Resposta{
     Usuario user = 1;
-    string mensagem = 2;
     bool sucesso = 3;
 }
 
 
 service LeituraService{
-    rpc GerenciaLeituras (EnvioLeitura) returns (Resposta);
+    rpc GerenciaLeituras (Leitura) returns (Resposta);
 }
-
-
-
-

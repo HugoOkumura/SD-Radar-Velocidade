@@ -52,10 +52,6 @@ class ServicoLeitura():
 
         # inicialização da conexão com o banco
         self.mongo = LeiturasManager()
-        try:
-            self.mongo.admin.command('ping')
-        except Exception as e:
-            logging.error(f"Serviço de Leituras falhou ao conectar ao MongoDB")
 
         logging.info(f"Serviço de Leituras conectou-se ao MongoDB")
         '''
@@ -142,7 +138,7 @@ class ServicoLeitura():
             trusted_certs = certif.read()
 
             credenciais = grpc.ssl_channel_credentials(
-                root_certificates=trusted_certs
+                root_certificates=trusted_certs,
             )
             options = [('grpc.ssl_target_name_override', 'servico_multas')]
             return grpc.secure_channel(
@@ -160,13 +156,16 @@ class ServicoLeitura():
                 infracoes = self.mongo.retrieve_infracoes()
 
                 for infracao in infracoes:
-                    logging.info(infracao['placa'])
                     with self.create_grpc_connection() as grpc_channel:
                         stub = leitura_pb2_grpc.LeituraServiceStub(grpc_channel)
 
+                        time = Timestamp()
+                        time.FromDatetime(infracao['data'])
+                        # logging.info(Timestamp().FromDatetime(infracao['data']))
+
                         response = stub.GerenciaLeituras(leitura_pb2.Leitura(
-                            limite = int32(infracao['limite']),
-                            data = Timestamp().FromDatetime(infracao['data']),
+                            limite = infracao['limite'],
+                            data = time,
                             velocidade = float(infracao['velocidade']),
                             placa = str(infracao['placa'])
                         ))

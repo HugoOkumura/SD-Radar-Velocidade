@@ -1,5 +1,6 @@
 from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
+from pymongo.errors import AutoReconnect
 
 '''
 Nome: Hugo Naoki Sonoda Okumura
@@ -16,7 +17,7 @@ Classe que irá gerenciar as funções de requisição de banco
 '''
 class LeiturasManager:
     def __init__(self):
-        self.mongo = MongoClient(URI, server_api=ServerApi('1'))
+        self.mongo = MongoClient(URI,server_api=ServerApi('1'))
         self.db = self.mongo['SD_Projeto']
         self.collection = self.db['LeiturasVelocidade']
 

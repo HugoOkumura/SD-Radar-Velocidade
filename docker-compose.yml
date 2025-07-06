@@ -66,9 +66,6 @@ services:
     volumes:
      - ./servico_leituras/logs/logs.log:/app/logs/logs.log
       
-
-
-  
   # servico-notificacao:
   #   build: ./servico_notificacao
   #   container_name: servico_notificacao
@@ -78,15 +75,15 @@ services:
   #   depends_on:
   #     - rabbitmq
   
-  # app-usuario:
-  #   build: ./app_usuario
-  #   container_name: app-usuario
-  #   environment:
-  #     - RABBITMQ_HOST=rabbitmq
-  #     - RABBITMQ_QUEUE=notificacao
-  #     - APIT_MULTAS=servico_multas
-  #   depends_on:
-  #     - rabbitmq
+  app-usuario:
+    build: ./app_usuario
+    container_name: app-usuario
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_QUEUE=notificacao
+      - APIT_MULTAS=servico_multas
+    # depends_on:
+    #   - rabbitmq
 
 volumes:
   mongodb_leituras:

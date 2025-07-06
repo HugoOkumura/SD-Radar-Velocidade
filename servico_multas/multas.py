@@ -1,5 +1,6 @@
 from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
+from pymongo.errors import AutoReconnect
 
 from leitura_pb2_grpc import add_LeituraServiceServicer_to_server , LeituraServiceServicer
 import leitura_pb2 
@@ -11,7 +12,7 @@ from concurrent import futures
 from threading import Thread
 import os
 import logging
-import ssl
+import time
 import json
 import hashlib
 import base64
@@ -36,18 +37,24 @@ MONGODB_URI = "mongodb+srv://admin:admin@sd.wrdeptn.mongodb.net/?retryWrites=tru
 class MultasServico(LeituraServiceServicer):
     
     def __init__(self):
-        self.mongo = MongoClient(MONGODB_URI, server_api=ServerApi('1'))
-        self.db = self.mongo['SD_Projeto']
-        self.multa_db = self.db['Multas']
-        self.usuario_db = self.db['Usuarios']
+        try:
+            self.mongo = MongoClient(MONGODB_URI, server_api=ServerApi('1'))
+            self.db = self.mongo['SD_Projeto']
+            self.multa_db = self.db['Multas']
+            self.usuario_db = self.db['Usuarios']
+            self.mongo.admin.command('ping')
+
+        except Exception as e:
+            logging.error(f"Serviço de Multas falhou em conectar ao MongoDB")
+
+        logging.info(f"Serviço de Multas conectou-se ao MongoDB")
 
     def GerenciaLeituras(self, request, context):
         try:
-            logging.info(request)
             usuario = self.usuario_db.find_one({"placa":request.placa})
             usuario = self.doc_to_usuario(usuario)
 
-            data = Timestamp(request.data).ToDatetime()
+            data = request.data.ToDatetime()
 
             multa_documento = {
                 "limite":request.limite,
@@ -66,11 +73,7 @@ class MultasServico(LeituraServiceServicer):
 
 
             return leitura_pb2.Resposta(
-                user=leitura_pb2.Usuario(
-                    id=usuario['_id'],
-                    nome=usuario['nome'],
-                    placa=usuario['placa']
-                ),
+                user=usuario,
                 sucesso=True
             )
 
@@ -165,7 +168,8 @@ def serve_grpc():
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
     add_LeituraServiceServicer_to_server(MultasServico(), server)
 
-    server.add_secure_port(f"[::]:{SERVICE_PORT}", server_credenciais)
+    # server.add_secure_port(f"[::]:{SERVICE_PORT}", server_credenciais)
+    server.add_secure_port(f"[::]:{50051}", server_credenciais)
 
     logging.info("Serviço de Multas inicializado")
     server.start()
