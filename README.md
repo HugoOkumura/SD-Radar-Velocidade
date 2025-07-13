@@ -79,3 +79,7 @@ Para inicializar o sistema
 <li> nome:HHHH - senha:HHHH
 <li> nome:IIII - senha:IIII
 </ul>
+
+## Link do vídeo apresentando o projeto funcionando
+
+https://www.youtube.com/watch?v=ARJniSYzEHY
