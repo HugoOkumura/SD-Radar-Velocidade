@@ -4,14 +4,15 @@ import os
 import json
 import logging
 import threading
-from queue import Queue
+import ssl
+import queue 
 from db_store import LeiturasManager
 import leitura_pb2
 import leitura_pb2_grpc
 from datetime import datetime, timezone
 from dateutil import parser
 from google.protobuf.timestamp_pb2 import Timestamp
-from numpy import int32
+import time
 '''
 Nome: Hugo Naoki Sonoda Okumura
 Criado: 23/06/2025
@@ -47,8 +48,7 @@ class ServicoLeitura():
     def __init__(self):
         
         # buffer de leituras
-        # self.leituras = deque(maxlen=50)
-        self.leituras = Queue(maxsize=100)
+        self.leituras = queue.Queue(maxsize=100)
 
         # inicialização da conexão com o banco
         self.mongo = LeiturasManager(os.getenv('MONGO_URI'))
@@ -60,7 +60,8 @@ class ServicoLeitura():
         self.client = mqtt.Client(
             callback_api_version=mqtt.CallbackAPIVersion.VERSION2,
             client_id=f"Servico_Leitura",
-            clean_session=False
+            clean_session=False,    # Mantém a sessão e mensagens não confirmadas
+            manual_ack=True         # Envio manual de ack para caso de mensagens não puderem ser armazenadas no buffer
         )
         self.client.enable_logger()
         self.client.on_connect = self._on_connect
@@ -68,8 +69,13 @@ class ServicoLeitura():
         self.client.on_message = self._on_message
         self.client.on_disconnect = self._on_disconnect
 
+        '''
+        Configuração de threads de recpção de leituras e de consumo do buffer interno
+        '''
         self.receive_thread = threading.Thread(target=self.thread_recebe, daemon=True)
         self.stop = threading.Event()
+        self.consumer_threads = []
+        self.max_consumers = 4
 
         logging.info(f"Serviço de Leituras Iniciado")
 
@@ -87,7 +93,7 @@ class ServicoLeitura():
             logging.error(f"Serviço de Leituras falhou em conectar ao MQTT broker: {reason_code}")
         else:
             logging.info(f"Serviço de Leituras conectou-se ao MQTT broker")
-            self.client.subscribe(MQTT_TOPIC)
+            self.client.subscribe(MQTT_TOPIC, qos=1)
 
     # Callback de inscrição com um tópico do broker
     def _on_subscribe(self,client, userdata, mid, reason_code_list, properties):
@@ -98,10 +104,28 @@ class ServicoLeitura():
 
     # Callback de recebimento de mensagens no tópico inscrito
     def _on_message(self, client, userdata, message):
-        logging.info(f"Serviço de Leituras recebeu uma leitura")
-        message = json.loads(message.payload.decode())
-        message['data'] = parser.isoparse(message['data'])
-        self.leituras.put_nowait(message)
+        try:
+            msg = json.loads(message.payload.decode())
+            msg['data'] = parser.isoparse(msg['data'])
+            try:
+                if self.leituras.full():
+                    logging.warning("Buffer interno cheio - aplicando backpressure")
+                    time.sleep(1)
+                    return          # Não processa nenhuma mensagem se a fila estiver cheia
+                
+                self.leituras.put(msg, block=True, timeout=5)
+                self.client.ack(message.mid, qos=1)  #confirma o consumo da mesnagem do MQTT
+                logging.info("Serviço de Leituras recebeu uma nova leitura de velocidade")
+
+            except queue.Full:
+                logging.warning("Timeout ao inserir no buffer - buffer cheio")
+                time.sleep(1)
+            
+        except json.JSONDecodeError as e:
+            logging.error(f"Erro ao decodificar o JSON: {e}")
+        except Exception as e:
+            logging.error(f"Erro inesperado: {e}")
+
 
     # Callback de desconecção ao broker
     def _on_disconnect(self, client, userdata, disconnect_flags, reason_code, properties):
@@ -118,17 +142,34 @@ class ServicoLeitura():
 
         threading.Thread(target=self.send_to_servico_multas, daemon=True).start()
 
+        for i in range(self.max_consumers):
+            t = threading.Thread(target=self.buffer_consumer, daemon=True)
+            t.start()
+            self.consumer_threads.append(t)
+
         while True:
-            if not self.leituras.empty():
-                leitura = self.leituras.get()
+            time.sleep(1)
 
-                if self.mongo.insert(leitura):
-                    logging.info(f"Serviço de Leituras inseriu uma leitura no banco")
-                else:
-                    logging.error(f"Serviço de Leituras falhou em inserir uma leitura no banco")
-                    self.leituras.put_nowait(leitura)
+    def buffer_consumer(self):
+        while True:
+            try:
+                leitura = self.leituras.get(block=True)
+                try:
+                    if self.mongo.insert(leitura):
+                        logging.info(f"Serviço de Leituras inseriu uma leitura no banco")
+                    else:
+                        logging.error(f"Serviço de Leituras falhou em inserir uma leitura no banco")
+                        raise Exception("Falha ao inserir no MongoDB")
+                    
+                except Exception as e:
+                    self.leituras.put(leitura)
+                    time.sleep(0.5)
+                finally:
+                    self.leituras.task_done()
 
-                self.leituras.task_done()
+            except Exception as e:
+                logging.error(f"Erro no Servidor {e}")
+                time.sleep(5)
 
     '''
     Stub gRPC com conexão segura
@@ -151,6 +192,9 @@ class ServicoLeitura():
     Thread que irá enviar Todas as leituras que são marcadas como infrações para o serviço de multas
     '''
     def send_to_servico_multas(self):
+        tentativas = 0
+        tentativas_limite = 5
+        tentativas_delay = 3
         while True:
             try:
                 infracoes = self.mongo.retrieve_infracoes()
@@ -161,7 +205,6 @@ class ServicoLeitura():
 
                         time = Timestamp()
                         time.FromDatetime(infracao['data'])
-                        # logging.info(Timestamp().FromDatetime(infracao['data']))
 
                         response = stub.GerenciaLeituras(leitura_pb2.Leitura(
                             limite = infracao['limite'],
@@ -183,20 +226,38 @@ class ServicoLeitura():
     Método que faz a rotina de conexão e inicia a thread que inicia o loop de recebimento de mensagens
     '''
     def connect(self):
-        try:
-            self.client.connect(
-                host=MQTT_BROKER,
-                port=MQTT_PORT
-            )
-            self.receive_thread.start()
-        except Exception as e:
-            logging.error(f"Serviço de Leituras: erro ao conectar - {e}")
+        tentativas_maxima = 5
 
+        self.client.username_pw_set(
+            username=os.getenv('MQTT_USERNAME'),
+            password=os.getenv('MQTT_PASSWORD')
+        )
+
+        self.client.tls_set(
+            ca_certs='./ca.crt',
+            cert_reqs=ssl.CERT_REQUIRED,
+        )
+
+        self.client.tls_insecure_set(False) # Valida certificado
+
+        for tentativa in range(tentativas_maxima):
+            try:
+                self.client.connect(
+                    host=MQTT_BROKER,
+                    port=MQTT_PORT
+                )
+                self.receive_thread.start()
+                break
+            except Exception as e:
+                logging.error(f"Serviço de Leituras: não conseguiu conectar ao broker - tentativa {tentativa+1} - {e}")
+                time.sleep(1)
+        logging.error(f"Serviço de Leituras não conseguiu conectar com o MQTT Broker em {tentativas_maxima} tentativas")
+
+    
     '''
     Thread que irá receber todas as mensagens do broker
     '''
     def thread_recebe(self):
-        print("THREAD")
         # O loop de network irá ficar em execução eternamente para receber as mensagens
         self.client.loop_forever()
 

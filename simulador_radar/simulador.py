@@ -5,6 +5,7 @@ import json
 import os
 import threading
 import logging
+import ssl
 from collections import deque  
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -118,14 +119,28 @@ class DispositivoIoT(threading.Thread):
     '''
     def connect(self):
         try:
+            self.client.username_pw_set(
+                username=os.getenv('MQTT_USERNAME'),
+                password=os.getenv('MQTT_PASSWORD')
+            )
+            # logging.info(F"user: {self.client.username}, pass: {self.client.password}")
+            self.client.tls_set(
+                ca_certs='./ca.crt',
+                cert_reqs=ssl.CERT_REQUIRED,
+            )
+
+            # self.client.tls_insecure_set(False)
+            self.client.enable_logger(logging.getLogger())
+            
             self.client.connect(
                 host=MQTT_BROKER,
                 port=MQTT_PORT
             )
-            self.send_thread.start()
 
             # Inicia o loop de network do mqtt. Sem este comando não é possível fazer publicações nem receber mensagens do broker
             self.client.loop_start()
+            #Inicia a thread do publisher de MQTT
+            self.send_thread.start()
 
         except Exception as e:
             logging.error(f"Dispositivo {self.id}: erro ao conectar - {e}")

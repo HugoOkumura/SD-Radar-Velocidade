@@ -1,5 +1,6 @@
 #!/bin/bash
 
+# Certificados para o GRPC
 # Generate CA
 openssl genrsa -out ca-key.pem 4096
 openssl req -new -x509 -days 365 -key ca-key.pem -out ca-cert.pem -subj "/CN=MultasCA"

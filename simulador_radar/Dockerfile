@@ -5,7 +5,7 @@ COPY requirements.txt .
 # RUN python3 -m venv ./
 RUN pip3 install -r requirements.txt
 
-COPY simulador.py .
+COPY . .
 
 CMD [ "python", "simulador.py" ]
 
